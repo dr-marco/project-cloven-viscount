@@ -1,7 +1,6 @@
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from document_processor import process_pdf
-import os
 
 # Define where to save the database on disk
 DB_DIR = "/app/chroma_db"
