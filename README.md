@@ -1,29 +1,29 @@
 # project-cloven-viscount
 
-An API-first Retrieval-Augmented Generation (RAG) system designed to analyze and query unstructured documents using Large Language Models (LLMs).
+An API-first Retrieval-Augmented Generation (RAG) system with a decoupled UI, designed to dynamically ingest and query unstructured documents using Large Language Models (LLMs).
 
 > ⚠️ **DISCLAIMER: Proof of Concept / Playground Environment**
 > This repository (*Project Cloven Viscount*) is an architectural Proof of Concept (PoC) built for personal exploration of modern AI/ML engineering patterns. It deliberately omits critical production safeguards (e.g., input sanitization, authentication, rate limiting, production-grade WSGI servers) to keep the codebase minimal. **Do not deploy this code to a public-facing environment "as is".**
 
 ## Architecture Overview
 
-This project implements a containerized RAG pipeline focusing on backend robustness and dynamic data ingestion.
+The system follows a microservices architecture orchestrated via Docker Compose, separating the ingestion/generation logic from the user interface:
 
-*   **API Framework:** FastAPI (Python 3.10)
-*   **Orchestration:** Docker & Docker Compose
-*   **Vector Store:** ChromaDB (Persistent local storage)
-*   **Embeddings:** `all-MiniLM-L6-v2` via HuggingFace (Local CPU inference)
-*   **LLM Inference:** Llama-3 via Groq API (Cloud inference)
-*   **Pipeline Logic:** LangChain Core (LCEL syntax)
+*   **Backend API:** FastAPI (Python 3.10) exposing REST endpoints.
+*   **Frontend UI:** Streamlit container communicating internally with the API.
+*   **Vector Store:** ChromaDB (Persistent local Docker Volume).
+*   **Embeddings:** `all-MiniLM-L6-v2` via HuggingFace (Local CPU inference).
+*   **LLM Inference:** Llama-3 via Groq API (Cloud inference).
+*   **Pipeline Logic:** LangChain Core (LCEL syntax).
 
 ## System Flow
 
-1.  **Ingestion:** PDF documents are parsed and chunked using LangChain's `RecursiveCharacterTextSplitter`.
-2.  **Vectorization:** Text chunks are converted into 384-dimensional embeddings and stored in a persistent ChromaDB volume.
-3.  **Retrieval:** User queries are matched against the vector database using Cosine Similarity (HNSW graph).
-4.  **Generation:** The top-k relevant chunks are passed as context to the LLM via LangChain Expression Language (LCEL) pipelines to generate deterministic, fact-grounded responses.
+1.  **Dynamic Ingestion:** Users upload PDF documents via the UI or API. The backend parses and chunks the text using `RecursiveCharacterTextSplitter`.
+2.  **Vectorization:** Chunks are converted into 384-dimensional embeddings and stored in the persistent ChromaDB volume (`./chroma_data`) in real-time.
+3.  **Retrieval:** User queries are matched against the vector database using Cosine Similarity (HNSW graph algorithm).
+4.  **Generation:** The top-k relevant chunks are passed as context to the LLM via LangChain Expression Language (LCEL) to generate deterministic, fact-grounded responses.
 
-## Setup & Installation
+## Setup & Run
 
 ### Prerequisites
 *   Docker and Docker Compose installed.
@@ -31,38 +31,37 @@ This project implements a containerized RAG pipeline focusing on backend robustn
 
 ### Initialization
 
-1. Clone the repository:
+1. Clone the repository and configure the environment:
    
 ```bash
    git clone <your-repo-url>
    cd cv-analyzer
-```
-2. Configure environment variables:
-Create a `.env` file in the root directory:
-
-```env
-   GROQ_API_KEY=gsk_your_api_key_here
+   
+   # Create a .env file and add your API key
+   echo "GROQ_API_KEY=gsk_your_api_key_here" > .env
 
 ```
 
-3. Build and run the infrastructure:
+2. Build and launch the cluster:
 
 ```bash
    docker-compose up --build
 
 ```
 
-## API Documentation
+## System Interfaces
 
-Once the container is running, the interactive Swagger UI is available at:
-`http://localhost:8000/docs`
+Once the containers are running, the system exposes two primary interfaces:
 
-### Core Endpoints
+### 1. Frontend Interface (Streamlit)
 
-* `GET /`: Health check.
-* `POST /analyze`: Accepts a JSON payload with a `question` string. Queries the Vector DB and returns the LLM-generated response.
-* *(Planned)* `POST /upload`: Dynamic ingestion of new PDF documents into the running Vector DB.
+* **URL:** `http://localhost:8501`
+* **Usage:** Provides a graphical interface to upload PDF documents dynamically via the sidebar and chat with the vector database using the main chat window.
 
-## Data Persistence
+### 2. Backend API Docs (Swagger UI)
 
-The ChromaDB vector store is mapped to a local Docker Volume (`./chroma_data`). This ensures that embeddings are preserved across container restarts. Do not commit this directory to version control.
+* **URL:** `http://localhost:8000/docs`
+* **Endpoints:**
+* `GET /`: System health check.
+* `POST /upload`: Accepts `multipart/form-data` (PDF files), chunks the text, computes embeddings, and persists them to ChromaDB.
+* `POST /analyze`: Accepts a JSON payload (`{"question": "..."}`), performs semantic search, and streams the context to the LLM to return the generated response.

@@ -3,7 +3,8 @@ version: '3.8'
 services:
   api_backend:
     build: .
-    container_name: cv_analyzer_container
+    image: cloven_base_image
+    container_name: cloven_viscount_api
     restart: unless-stopped
     env_file:
       - .env
@@ -13,7 +14,7 @@ services:
       - ./chroma_data:/app/chroma_db
 
   ui_frontend:
-    build: .
+    image: cloven_base_image
     container_name: cloven_viscount_ui
     restart: unless-stopped
     ports:
