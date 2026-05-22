@@ -8,6 +8,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      - CHROMA_DB_DIR=/app/chroma_db
     ports:
       - "8000:8000"
     volumes:

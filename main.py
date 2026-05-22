@@ -21,7 +21,7 @@ class requestAnalysis(BaseModel):
 
 @app.get("/")
 def base_route():
-    return {"messagge": "FastAPI server is active and working!"}
+    return {"message": "FastAPI server is active and working!"}
 
 @app.post("/analyze")
 def analyze_data(request: requestAnalysis):
