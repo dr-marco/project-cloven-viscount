@@ -35,13 +35,30 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: pytest test_api.py -v
 
-  # Job 2: Infrastructure Verification
+  # Job 2: Infrastructure Verification & CD (Push to Registry)
   docker-build:
     runs-on: ubuntu-latest
-    needs: lint-and-test  # This explicitly tells GitHub to run this ONLY if 'lint' succeeds
+    needs: lint-and-test 
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Convert repository name to lowercase
+        run: echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
         
-      - name: Build Docker image
-        run: docker build -t cloven_viscount_api:test .
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ env.REPO_LC }}:latest
