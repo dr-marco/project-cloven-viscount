@@ -1,22 +1,31 @@
 version: '3.8'
 
 services:
+  redis_broker:
+    image: redis:alpine
+    container_name: cloven_viscount_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
   api_backend:
-    build: .
-    image: cloven_base_image
+    image: ghcr.io/dr-marco/project-cloven-viscount:latest
     container_name: cloven_viscount_api
     restart: unless-stopped
     env_file:
       - .env
     environment:
       - CHROMA_DB_DIR=/app/chroma_db
+      - CELERY_BROKER_URL=redis://redis_broker:6379/0
     ports:
       - "8000:8000"
     volumes:
       - ./chroma_data:/app/chroma_db
+    depends_on:
+      - redis_broker
 
   ui_frontend:
-    image: cloven_base_image
+    image: ghcr.io/dr-marco/project-cloven-viscount:latest
     container_name: cloven_viscount_ui
     restart: unless-stopped
     ports:
@@ -24,3 +33,19 @@ services:
     command: streamlit run frontend.py --server.address 0.0.0.0
     depends_on:
       - api_backend
+
+  celery_worker:
+    image: ghcr.io/dr-marco/project-cloven-viscount:latest
+    container_name: cloven_celery_worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - CELERY_BROKER_URL=redis://redis_broker:6379/0
+      - CHROMA_DB_DIR=/app/chroma_db
+    command: celery -A worker.celery_app worker --loglevel=info
+    volumes:
+      - ./chroma_data:/app/chroma_db
+      - ./data:/app/data
+    depends_on:
+      - redis_broker
