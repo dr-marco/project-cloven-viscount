@@ -1,6 +1,7 @@
 import os
-import time
 from celery import Celery
+from document_processor import process_pdf
+from vector_store import get_vector_database
 
 broker_url = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
 
@@ -19,19 +20,20 @@ celery_app.conf.update(
 @celery_app.task(name="process_document_task")
 def process_document_task(file_path: str, filename: str):
     try:
-        # In un setup reale qui importeresti: process_pdf(file_path) e db.add_documents()
-        
-        # Simuliamo un processo pesante bloccante (es. embedding di 100 pagine)
         print(f"Starting elaboration of: {filename}")
-        time.sleep(10) # <-- FastAPI timeout here, Celery no. TODO remove
         
-        print(f"Elaboration of {filename} completed. Vectors saved in ChromaDB.")
+        chunks = process_pdf(file_path)
+        print(f"Estracted {len(chunks)} segments from document.")
+        
+        db = get_vector_database()
+        db.add_documents(chunks)
         
         if os.path.exists(file_path):
             os.remove(file_path)
             
-        return {"status": "success", "filename": filename, "message": "Document ingested"}
+        print(f"Elaboration of {filename} completed. Vectors saved.")
+        return {"status": "success", "filename": filename, "chunks": len(chunks)}
         
     except Exception as e:
-        print(f"Error during elaboration: {str(e)}")
+        print(f"Critic error during elaboration of {filename}: {str(e)}")
         return {"status": "error", "message": str(e)}

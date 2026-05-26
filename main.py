@@ -4,8 +4,6 @@ from rag_engine import setup_rag_chain
 from fastapi import UploadFile, File
 import os
 import shutil
-from document_processor import process_pdf
-from vector_store import get_vector_database
 from worker import process_document_task
 
 app = FastAPI(
