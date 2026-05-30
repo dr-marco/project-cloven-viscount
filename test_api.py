@@ -9,12 +9,12 @@ def test_health_check():
     assert response.status_code == 200
     assert "message" in response.json()
 
-def test_analyze_endpoint_validation():
+def test_chat_endpoint_validation():
     response = client.post("/chat", json={})
     assert response.status_code == 422
 
-def test_analyze_endpoint_valid_payload():
-    payload = {"question": "What is this document about?"}
+def test_chat_endpoint_valid_payload():
+    payload = {"query": "What is this document about?"}
     response = client.post("/chat", json=payload)
     
     assert response.status_code in [200, 500] 
@@ -22,5 +22,5 @@ def test_analyze_endpoint_valid_payload():
     if response.status_code == 200:
         data = response.json()
         assert "answer" in data
-        assert "question" in data
-        assert data["question"] == payload["question"]
+        assert "query" in data
+        assert data["query"] == payload["query"]
