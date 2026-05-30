@@ -72,7 +72,7 @@ async def get_task_status(task_id: str):
     I possibili stati sono: PENDING, STARTED, SUCCESS, FAILURE.
     """
     try:
-        task_result = AsyncResult(task_id, app=process_document_task)
+        task_result = AsyncResult(task_id, app=celery_app)
         return {
             "task_id": task_id,
             "status": task_result.status,
