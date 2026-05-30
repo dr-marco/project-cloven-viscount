@@ -57,7 +57,7 @@ class ChatRequest(BaseModel):
 
 @app.post("/chat")
 @limiter.limit("5/minute")
-async def chat_with_document(request: Request, payload ChatRequest):
+async def chat_with_document(request: Request, payload: ChatRequest):
     try:
         answer = ask_document(request.query)
         return {"query": payload.query, "answer": answer}
