@@ -39,7 +39,7 @@ def ask_document(query_text: str) -> str:
     )
 
     # 5. Invoca la catena
-    return rag_chain
+    return rag_chain.invoke(query_text)
 
 if __name__ == "__main__":
        
