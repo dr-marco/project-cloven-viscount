@@ -26,21 +26,42 @@ with st.sidebar:
     
     if uploaded_file is not None:
         if st.button("Process Document"):
-            with st.spinner("Sending document to background worker..."):
+            # 1. Invio del file (Upload)
+            with st.spinner("Uploading document to server..."):
                 try:
-                    # Call the FastAPI upload endpoint
                     files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
                     response = requests.post(f"{API_BASE_URL}/upload", files=files)
                     
                     if response.status_code == 200:
                         data = response.json()
-                        st.success("✅ File accepted! Processing in background.")
-                        st.info(f"Task ID: {data.get('task_id')}")
-                        st.session_state.file_processed = True
+                        task_id = data.get('task_id')
+                        st.info(f"Task ID: {task_id} generated. Starting processing...")
                         
-                        # Short pause to let Celery handle the initial chunking
-                        # In a future update, we will implement task status polling
-                        time.sleep(2) 
+                        # 2. Inizio del Polling Asincrono
+                        status = "PENDING"
+                        # Il contenitore per i messaggi di aggiornamento
+                        status_placeholder = st.empty() 
+                        
+                        while status not in ["SUCCESS", "FAILURE"]:
+                            status_placeholder.info(f"Current status: {status}... querying backend.")
+                            time.sleep(2) # Pausa tra una chiamata e l'altra per non floodare l'API
+                            
+                            status_response = requests.get(f"{API_BASE_URL}/task-status/{task_id}")
+                            if status_response.status_code == 200:
+                                status_data = status_response.json()
+                                status = status_data.get("status")
+                            else:
+                                st.error("Error communicating with the backend status endpoint.")
+                                break
+                        
+                        # 3. Gestione del risultato finale
+                        status_placeholder.empty() # Pulisce i messaggi temporanei
+                        if status == "SUCCESS":
+                            st.success("✅ Document processed successfully! You can now ask questions.")
+                            st.session_state.file_processed = True
+                        elif status == "FAILURE":
+                            st.error("❌ There was an error processing the document by the worker.")
+                            
                     else:
                         st.error(f"Error {response.status_code}: {response.text}")
                 except Exception as e:
