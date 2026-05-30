@@ -13,7 +13,7 @@ def format_docs(docs):
 
 
 def ask_document(query_text: str) -> str:
-    llm = ChatGroq(temperature=0, model_name="llama3-8b-8192")
+    llm = ChatGroq(temperature=0, model_name="llama-3.1-8b-instant")
     
     db = get_vector_database()
     retriever = db.as_retriever(search_kwargs={"k": 3})

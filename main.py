@@ -17,25 +17,10 @@ app = FastAPI(
     version="1.0"
 )
 
-# print("Initializing RAG Engine on server startup...")
-# rag_chain = setup_rag_chain()
-
 @app.get("/")
 def base_route():
     return {"message": "FastAPI server is active and working!"}
 
-# @app.post("/analyze")
-# def analyze_data(request: requestAnalysis):
-#     try:
-#         answer = rag_chain.invoke(request.question)
-        
-#         return {
-#             "status": "success",
-#             "question": request.question,
-#             "answer": answer
-#         }
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
