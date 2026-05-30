@@ -56,7 +56,7 @@ async def upload_document(file: UploadFile = File(...)):
     return {
         "status": "accepted", 
         "message": "Document added in elaboration queue.",
-        "task_id": task.id 
+        "task_id": task.id,
         "filename_saved_as": safe_filename
     }
 

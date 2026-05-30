@@ -39,19 +39,17 @@ def ask_document(query_text: str) -> str:
     )
 
     # 5. Invoca la catena
-    return rag_chain.invoke(query_text)
+    return rag_chain
 
 if __name__ == "__main__":
-    print("Initializing RAG System...")
-    chain = setup_rag_chain()
-    
+       
     # Test the system!
     user_question = "What is the mandatory skill required to apply this position?"
     print(f"\nUser Question: {user_question}")
     print("Generating answer based on documents...\n")
     
     # We pass the input to the chain and invoke it
-    response = chain.invoke(user_question)
+    response = ask_document(user_question)
     
     print("--- AI ANSWER ---")
     print(response)
