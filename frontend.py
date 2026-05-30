@@ -1,60 +1,84 @@
 import streamlit as st
 import requests
+import time
 
-API_URL = "http://api_backend:8000"
+# Page configuration
+st.set_page_config(page_title="Cloven Viscount RAG", page_icon="🗡️", layout="wide")
 
-st.set_page_config(page_title="Cloven Viscount", page_icon="🗡️")
-st.title("Project Cloven Viscount 🗡️")
-st.markdown("Your RAG-powered document assistant.")
+# Backend URL (FastAPI runs on port 8000 in the api_backend container)
+API_BASE_URL = "http://api_backend:8000"
 
-# --- SIDEBAR: Upload Documenti ---
-with st.sidebar:
-    st.header("Document Ingestion")
-    uploaded_file = st.file_uploader("Upload a new PDF", type=["pdf"])
-    
-    if st.button("Process Document") and uploaded_file:
-        with st.spinner("Chunking and vectorizing..."):
-            # Prepariamo il file per essere inviato via POST
-            files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
-            try:
-                response = requests.post(f"{API_URL}/upload", files=files)
-                if response.status_code == 200:
-                    st.success(f"Successfully ingested: {uploaded_file.name}")
-                else:
-                    st.error(f"API Error: {response.text}")
-            except requests.exceptions.ConnectionError:
-                st.error("Cannot connect to the Backend API. Is it running?")
-
-# --- MAIN AREA: Interfaccia Chat ---
-st.header("Query your documents")
-
-# Inizializza lo storico della chat nella sessione
+# --- STATE INITIALIZATION ---
+# Streamlit reloads the page on every interaction. 
+# We use session_state to keep track of chat history and file processing status.
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "file_processed" not in st.session_state:
+    st.session_state.file_processed = False
 
-# Disegna i messaggi passati
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+st.title("🗡️ Cloven Viscount - Document Intelligence")
+st.markdown("Upload a PDF document and ask questions to the RAG model.")
 
-# Input testuale per la nuova domanda
-if prompt := st.chat_input("Ask something about the ingested documents..."):
-    # 1. Mostra la domanda dell'utente
+# --- SIDEBAR: UPLOAD MANAGEMENT ---
+with st.sidebar:
+    st.header("1. Document Ingestion")
+    uploaded_file = st.file_uploader("Upload a PDF document", type=["pdf"])
+    
+    if uploaded_file is not None:
+        if st.button("Process Document"):
+            with st.spinner("Sending document to background worker..."):
+                try:
+                    # Call the FastAPI upload endpoint
+                    files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
+                    response = requests.post(f"{API_BASE_URL}/upload", files=files)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        st.success("✅ File accepted! Processing in background.")
+                        st.info(f"Task ID: {data.get('task_id')}")
+                        st.session_state.file_processed = True
+                        
+                        # Short pause to let Celery handle the initial chunking
+                        # In a future update, we will implement task status polling
+                        time.sleep(2) 
+                    else:
+                        st.error(f"Error {response.status_code}: {response.text}")
+                except Exception as e:
+                    st.error(f"Backend connection error: {e}")
+
+# --- MAIN AREA: CHAT INTERFACE ---
+st.header("2. Document Query (Chat)")
+
+# Display chat history
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# User input
+if prompt := st.chat_input("Ask a question about the uploaded document..."):
+    # Warning if the user hasn't uploaded a file yet
+    if not st.session_state.file_processed:
+        st.warning("⚠️ Warning: Please make sure to upload and process a document before asking questions.")
+
+    # 1. Add user question to the UI
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
-    
-    # 2. Chiama l'API per ottenere la risposta
+
+    # 2. Call the backend API
     with st.chat_message("assistant"):
-        with st.spinner("Searching the vector space..."):
+        with st.spinner("Searching documents and generating response..."):
             try:
-                response = requests.post(f"{API_URL}/analyze", json={"question": prompt})
+                # Call our new /chat endpoint
+                payload = {"query": prompt}
+                response = requests.post(f"{API_BASE_URL}/chat", json=payload)
+                
                 if response.status_code == 200:
-                    answer = response.json().get("answer", "No answer generated.")
+                    answer = response.json().get("answer", "No response received.")
                     st.markdown(answer)
-                    # Salva la risposta nello storico
+                    # Save the response in the chat history
                     st.session_state.messages.append({"role": "assistant", "content": answer})
                 else:
-                    st.error(f"API Error: {response.status_code}")
-            except requests.exceptions.ConnectionError:
-                st.error("Cannot connect to the Backend API.")
+                    st.error(f"Backend error: {response.text}")
+            except Exception as e:
+                st.error(f"Backend connection error: {e}")

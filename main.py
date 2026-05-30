@@ -1,10 +1,15 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from rag_engine import setup_rag_chain
+from rag_engine import ask_document
 from fastapi import UploadFile, File
 import os
 import shutil
+import re
 from worker import process_document_task
+
+def sanitize_filename(filename: str) -> str:
+    clean_name = re.sub(r'[^a-zA-Z0-9.\-]', '_', filename)
+    return re.sub(r'_+', '_', clean_name)
 
 app = FastAPI(
     title="Cloven Viscount API",
@@ -12,37 +17,36 @@ app = FastAPI(
     version="1.0"
 )
 
-print("Initializing RAG Engine on server startup...")
-rag_chain = setup_rag_chain()
-
-class requestAnalysis(BaseModel):
-    question: str
+# print("Initializing RAG Engine on server startup...")
+# rag_chain = setup_rag_chain()
 
 @app.get("/")
 def base_route():
     return {"message": "FastAPI server is active and working!"}
 
-@app.post("/analyze")
-def analyze_data(request: requestAnalysis):
-    try:
-        answer = rag_chain.invoke(request.question)
+# @app.post("/analyze")
+# def analyze_data(request: requestAnalysis):
+#     try:
+#         answer = rag_chain.invoke(request.question)
         
-        return {
-            "status": "success",
-            "question": request.question,
-            "answer": answer
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+#         return {
+#             "status": "success",
+#             "question": request.question,
+#             "answer": answer
+#         }
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
     
+    safe_filename = sanitize_filename(file.filename)
+
     # Salva il file temporaneamente
     os.makedirs("data", exist_ok=True)
-    file_path = f"data/{file.filename}"
+    file_path = f"data/{safe_filename}"
     
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -51,37 +55,23 @@ async def upload_document(file: UploadFile = File(...)):
     
     return {
         "status": "accepted", 
-        "message": "Il documento è stato messo in coda per l'elaborazione.",
+        "message": "Document added in elaboration queue.",
         "task_id": task.id 
+        "filename_saved_as": safe_filename
     }
 
+class ChatRequest(BaseModel):
+    query: str
 
-# @app.post("/upload")
-# async def upload_document(file: UploadFile = File(...)):
-    
-#     # 1. Verifica che sia un PDF
-#     if not file.filename.endswith(".pdf"):
-#         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
-    
-#     # 2. Salva il file fisicamente dentro il container
-#     os.makedirs("data", exist_ok=True)
-#     file_path = f"data/{file.filename}"
-    
-#     with open(file_path, "wb") as buffer:
-#         shutil.copyfileobj(file.file, buffer)
+@app.post("/chat")
+async def chat_with_document(request: ChatRequest):
+    try:
+        answer = ask_document(request.query)
         
-#     try:
-#         # 3. Usa lo script dello Sprint 2 per tagliare il PDF in chunk
-#         chunks = process_pdf(file_path)
-        
-#         # 4. Ottieni l'istanza del database Chroma e aggiungi i nuovi chunk
-#         db = get_vector_database()
-#         db.add_documents(chunks)
-        
-#         return {
-#             "status": "success", 
-#             "message": f"File '{file.filename}' elaborated correctly.",
-#             "chunks_added": len(chunks)
-#         }
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Error during PDF elaboration: {str(e)}")
+        return {
+            "status": "success",
+            "query": request.query,
+            "answer": answer
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
