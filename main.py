@@ -59,7 +59,7 @@ class ChatRequest(BaseModel):
 @limiter.limit("5/minute")
 async def chat_with_document(request: Request, payload: ChatRequest):
     try:
-        answer = ask_document(request.query)
+        answer = ask_document(payload.query)
         return {"query": payload.query, "answer": answer}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
