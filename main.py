@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
+from typing import List, Optional
 from rag_engine import ask_document
 from fastapi import UploadFile, File
 import os
@@ -10,13 +11,39 @@ from celery.result import AsyncResult
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from langchain.globals import set_debug
+from contextlib import asynccontextmanager
+from vector_store import get_vector_database
+
+# DEBUG flag
+set_debug(False)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- STARTUP (Warmup) ---
+    print("🚀 Server inizialization - ongoing Warmup...")
+    try:
+        # enforce loading Embeffing model in RAM
+        db = get_vector_database()
+        
+        # forcing ChromaDB to open and to index files
+        collection_count = db._collection.count()
+        print(f"✅ Warmup completed. Vectorial database ready (active collections: {collection_count}).")
+    except Exception as e:
+        print(f"⚠️ partial Warmup (DB could be empty or not initialized): {e}")
+    
+    yield
+    
+    # --- SHUTDOWN (Cleanup) ---
+    print("🛑 Spegnimento del server in corso. Rilascio delle risorse...")
 
 def sanitize_filename(filename: str) -> str:
     clean_name = re.sub(r'[^a-zA-Z0-9.\-]', '_', filename)
     return re.sub(r'_+', '_', clean_name)
 
 app = FastAPI(
-    title="Cloven Viscount API"
+    title="Cloven Viscount API",
+    lifespan=lifespan
 )
 
 limiter = Limiter(key_func=get_remote_address)
@@ -36,7 +63,6 @@ async def upload_document(file: UploadFile = File(...)):
     
     safe_filename = sanitize_filename(file.filename)
 
-    # Salva il file temporaneamente
     os.makedirs("data", exist_ok=True)
     file_path = f"data/{safe_filename}"
     
@@ -52,14 +78,19 @@ async def upload_document(file: UploadFile = File(...)):
         "filename_saved_as": safe_filename
     }
 
+class Message(BaseModel):
+    role: str      
+    content: str  
+
 class ChatRequest(BaseModel):
     query: str
+    history: List[Message] = []
 
 @app.post("/chat")
 @limiter.limit("5/minute")
 async def chat_with_document(request: Request, payload: ChatRequest):
     try:
-        answer = ask_document(payload.query)
+        answer = ask_document(payload.query, payload.history)
         return {"query": payload.query, "answer": answer}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
@@ -68,17 +99,30 @@ async def chat_with_document(request: Request, payload: ChatRequest):
 @app.get("/task-status/{task_id}")
 async def get_task_status(task_id: str):
     """
-    Interroga Redis per scoprire a che punto è il task di Celery.
-    I possibili stati sono: PENDING, STARTED, SUCCESS, FAILURE.
+    Query Redis to check the status of the Celery task.
+    Possible states: PENDING, STARTED, SUCCESS, FAILURE.
     """
     try:
         task_result = AsyncResult(task_id, app=celery_app)
         return {
             "task_id": task_id,
             "status": task_result.status,
-            # result conterrà il valore di ritorno della funzione Celery se SUCCESS, 
-            # o l'errore se FAILURE.
             "result": str(task_result.result) if task_result.ready() else None
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore nel recupero stato: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting task status: {str(e)}")
+
+@app.get("/db-status")
+async def get_db_status():
+    """
+    Check if the database has some documents saved or if it is empty 
+    """
+    try:
+        db = get_vector_database()
+        count = db._collection.count()
+        return {
+            "has_documents": count > 0, 
+            "document_count": count
+        }
+    except Exception as e:
+        return {"has_documents": False, "document_count": 0}

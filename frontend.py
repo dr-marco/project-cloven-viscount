@@ -16,17 +16,31 @@ if "messages" not in st.session_state:
 if "file_processed" not in st.session_state:
     st.session_state.file_processed = False
 
+if "db_populated" not in st.session_state:
+    try:
+        res = requests.get(f"{API_BASE_URL}/db-status")
+        if res.status_code == 200:
+            st.session_state.db_populated = res.json().get("has_documents", False)
+        else:
+            st.session_state.db_populated = False
+    except:
+        st.session_state.db_populated = False
+
 st.title("🗡️ Cloven Viscount - Document Intelligence")
 st.markdown("Upload a PDF document and ask questions to the RAG model.")
 
+if st.session_state.db_populated or st.session_state.file_processed:
+    st.info("ℹ️ The database already contains documents. You can ask questions or upload a new PDF to enrich the knowledge base.")
+else:
+    st.warning("⚠️ Warning: Please make sure to upload and process a document before asking questions.")
+
 # --- SIDEBAR: UPLOAD MANAGEMENT ---
 with st.sidebar:
-    st.header("1. Document Ingestion")
+    st.header("Document Ingestion")
     uploaded_file = st.file_uploader("Upload a PDF document", type=["pdf"])
     
     if uploaded_file is not None:
         if st.button("Process Document"):
-            # 1. Invio del file (Upload)
             with st.spinner("Uploading document to server..."):
                 try:
                     files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
@@ -37,14 +51,12 @@ with st.sidebar:
                         task_id = data.get('task_id')
                         st.info(f"Task ID: {task_id} generated. Starting processing...")
                         
-                        # 2. Inizio del Polling Asincrono
                         status = "PENDING"
-                        # Il contenitore per i messaggi di aggiornamento
                         status_placeholder = st.empty() 
                         
                         while status not in ["SUCCESS", "FAILURE"]:
                             status_placeholder.info(f"Current status: {status}... querying backend.")
-                            time.sleep(2) # Pausa tra una chiamata e l'altra per non floodare l'API
+                            time.sleep(2) 
                             
                             status_response = requests.get(f"{API_BASE_URL}/task-status/{task_id}")
                             if status_response.status_code == 200:
@@ -54,8 +66,7 @@ with st.sidebar:
                                 st.error("Error communicating with the backend status endpoint.")
                                 break
                         
-                        # 3. Gestione del risultato finale
-                        status_placeholder.empty() # Pulisce i messaggi temporanei
+                        status_placeholder.empty() 
                         if status == "SUCCESS":
                             st.success("✅ Document processed successfully! You can now ask questions.")
                             st.session_state.file_processed = True
@@ -68,7 +79,6 @@ with st.sidebar:
                     st.error(f"Backend connection error: {e}")
 
 # --- MAIN AREA: CHAT INTERFACE ---
-st.header("2. Document Query (Chat)")
 
 # Display chat history
 for message in st.session_state.messages:
@@ -77,9 +87,9 @@ for message in st.session_state.messages:
 
 # User input
 if prompt := st.chat_input("Ask a question about the uploaded document..."):
-    # Warning if the user hasn't uploaded a file yet
-    if not st.session_state.file_processed:
-        st.warning("⚠️ Warning: Please make sure to upload and process a document before asking questions.")
+    if not (st.session_state.db_populated or st.session_state.file_processed):
+        st.error("Operation blocked: upload a document before query.")
+        st.stop()
 
     # 1. Add user question to the UI
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -91,7 +101,13 @@ if prompt := st.chat_input("Ask a question about the uploaded document..."):
         with st.spinner("Searching documents and generating response..."):
             try:
                 # Call our new /chat endpoint
-                payload = {"query": prompt}
+                past_history = st.session_state.messages[:-1]
+                
+                payload = {
+                    "query": prompt,
+                    "history": past_history
+                }
+                
                 response = requests.post(f"{API_BASE_URL}/chat", json=payload)
                 
                 if response.status_code == 200:

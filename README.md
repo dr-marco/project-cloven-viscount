@@ -1,67 +1,49 @@
-# project-cloven-viscount
+# 📚 Project Cloven Viscount - Enterprise RAG Architecture
 
-An API-first Retrieval-Augmented Generation (RAG) system with a decoupled UI, designed to dynamically ingest and query unstructured documents using Large Language Models (LLMs).
+Cloven Viscount is a production-ready, asynchronous Retrieval-Augmented Generation (RAG) system built to converse with corporate documents. Designed with separation of concerns in mind, it decouples heavy document ingestion from fast LLM querying, ensuring a highly responsive User Experience.
 
 > ⚠️ **DISCLAIMER: Proof of Concept / Playground Environment**
-> This repository (*Project Cloven Viscount*) is an architectural Proof of Concept (PoC) built for personal exploration of modern AI/ML engineering patterns. It deliberately omits critical production safeguards (e.g., input sanitization, authentication, rate limiting, production-grade WSGI servers) to keep the codebase minimal. **Do not deploy this code to a public-facing environment "as is".**
+> This repository (*Project Cloven Viscount*) has evolved to include core security and operational patterns (such as IP-based rate limiting and input sanitization). However, it remains an architectural Proof of Concept (PoC) built for personal exploration. It deliberately omits production-grade safeguards like robust User Authentication (OAuth2/OIDC), TLS termination at the application level, and a persistent, scalable relational database layer. **Do not deploy this code directly to a public-facing production environment "as is".**
 
-## Architecture Overview
+## 🏗️ Architecture & Tech Stack
 
-The system follows a microservices architecture orchestrated via Docker Compose, separating the ingestion/generation logic from the user interface:
+- **Gateway & API:** FastAPI (with lifespan cold-start optimization)
+- **Frontend:** Streamlit (Async Polling & Dynamic Status)
+- **Background Workers:** Celery + Redis (Message Broker)
+- **Vector Database:** ChromaDB (Persistent local volume)
+- **LLM Engine:** LangChain (Pure LCEL implementation) + Groq (LLaMA-3)
+- **Security:** `slowapi` for Rate Limiting & DoS prevention
+- **Infrastructure:** Docker Compose (with Hot Reload for development)
 
-*   **Backend API:** FastAPI (Python 3.10) exposing REST endpoints.
-*   **Frontend UI:** Streamlit container communicating internally with the API.
-*   **Vector Store:** ChromaDB (Persistent local Docker Volume).
-*   **Embeddings:** `all-MiniLM-L6-v2` via HuggingFace (Local CPU inference).
-*   **LLM Inference:** Llama-3 via Groq API (Cloud inference).
-*   **Pipeline Logic:** LangChain Core (LCEL syntax).
+## ✨ Core Features
 
-## System Flow
+1. **Asynchronous Document Ingestion:** Uploaded PDFs are handed off to background Celery workers. The UI polls the backend via a dedicated status endpoint, preventing timeout errors on large documents.
+2. **History-Aware Conversational Memory:** The system doesn't just search; it remembers. Using a dual-pass LCEL chain, the LLM reformulates user queries based on past chat history before querying the vector store, allowing for natural use of pronouns and contextual follow-ups.
+3. **Basic security:** API endpoints are protected against path traversal and shielded by an IP-based rate limiter (max 5 requests/minute) to prevent API key depletion.
+4. **Optimized Cold Start:** HuggingFace embedding models and ChromaDB instances are pre-warmed during FastAPI's boot sequence, ensuring the user's first query is instantly processed.
 
-1.  **Dynamic Ingestion:** Users upload PDF documents via the UI or API. The backend parses and chunks the text using `RecursiveCharacterTextSplitter`.
-2.  **Vectorization:** Chunks are converted into 384-dimensional embeddings and stored in the persistent ChromaDB volume (`./chroma_data`) in real-time.
-3.  **Retrieval:** User queries are matched against the vector database using Cosine Similarity (HNSW graph algorithm).
-4.  **Generation:** The top-k relevant chunks are passed as context to the LLM via LangChain Expression Language (LCEL) to generate deterministic, fact-grounded responses.
+## 🚀 Getting Started (Development)
 
-## Setup & Run
+1. Clone the repository.
+2. Ensure you have your `.env` file configured with your `GROQ_API_KEY`.
+3. Create a `docker-compose.override.yml` for local Hot Reload (added to `.gitignore`):
+   ```yaml
+   version: '3.8'
+   services:
+     api_backend:
+       volumes:
+         - .:/app
+       command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    ```
 
-### Prerequisites
-*   Docker and Docker Compose installed.
-*   A valid Groq API Key.
-
-### Initialization
-
-1. Clone the repository and configure the environment:
-   
+4. Build and run the infrastructure:
 ```bash
-   git clone <your-repo-url>
-   cd cv-analyzer
-   
-   # Create a .env file and add your API key
-   echo "GROQ_API_KEY=gsk_your_api_key_here" > .env
+docker-compose up -d
 
 ```
 
-2. Build and launch the cluster:
+5. Access the Streamlit UI at `http://localhost:8501`.
 
-```bash
-   docker-compose up --build
+## 🛣️ Roadmap - next phase
 
-```
-
-## System Interfaces
-
-Once the containers are running, the system exposes two primary interfaces:
-
-### 1. Frontend Interface (Streamlit)
-
-* **URL:** `http://localhost:8501`
-* **Usage:** Provides a graphical interface to upload PDF documents dynamically via the sidebar and chat with the vector database using the main chat window.
-
-### 2. Backend API Docs (Swagger UI)
-
-* **URL:** `http://localhost:8000/docs`
-* **Endpoints:**
-* `GET /`: System health check.
-* `POST /upload`: Accepts `multipart/form-data` (PDF files), chunks the text, computes embeddings, and persists them to ChromaDB.
-* `POST /analyze`: Accepts a JSON payload (`{"question": "..."}`), performs semantic search, and streams the context to the LLM to return the generated response.
+* Phase D: Relational Database (PostgreSQL) for Document/User Metadata & Deletion logic.

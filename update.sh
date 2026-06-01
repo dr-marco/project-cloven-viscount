@@ -1,19 +1,19 @@
 #!/bin/bash
 
-echo "🚀 Inizio procedura di aggiornamento..."
+echo "🚀 Starting update procedure..."
 
-# 1. Scarica l'ultima versione dell'immagine dal Container Registry
-echo "⬇️ Pulling delle nuove immagini..."
+# 1. Download the latest version of the image from the Container Registry
+echo "⬇️ Pulling new images..."
 docker-compose pull
 
-# 2. Ricrea e riavvia i container (solo quelli in cui l'immagine è cambiata)
-echo "🔄 Ricreazione dei container in background..."
+# 2. Recreate and restart the containers (only those where the image has changed)
+echo "🔄 Recreating containers in the background..."
 docker-compose up -d
 
-# 3. Pulizia
-# Rimuove le immagini vecchie senza nome (dangling) che occupano giga di spazio prezioso
-echo "🧹 Pulizia delle immagini vecchie..."
+# 3. Cleanup
+# Removes old unnamed (dangling) images that take up gigabytes of precious space
+echo "🧹 Cleaning up old images..."
 docker image prune -f
 
-echo "✅ Aggiornamento completato!"
-echo "🔍 Per vedere cosa sta succedendo sotto il cofano, usa: docker-compose logs -f"
+echo "✅ Update completed!"
+echo "🔍 To see what's happening under the hood, use: docker-compose logs -f"

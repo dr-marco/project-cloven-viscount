@@ -5,10 +5,10 @@ from vector_store import get_vector_database
 
 broker_url = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
 
-# Inizializziamo l'applicazione Celery
+# Celery app initialization
 celery_app = Celery("cloven_worker", broker=broker_url, backend=broker_url)
 
-# Configuriamo il worker per essere resiliente
+# worker configuration
 celery_app.conf.update(
     task_serializer='json',
     accept_content=['json'],

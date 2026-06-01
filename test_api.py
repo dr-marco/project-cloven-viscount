@@ -1,7 +1,6 @@
 from fastapi.testclient import TestClient
 from main import app 
 
-# TestClient simula un client HTTP che interagisce con la tua API
 client = TestClient(app)
 
 def test_health_check():

@@ -37,7 +37,6 @@ def get_vector_database():
     return Chroma(persist_directory=DB_DIR, embedding_function=embeddings)
 
 if __name__ == "__main__":
-    # Test path from Sprint 2
     test_pdf_path = "data/sample-job.pdf"
     
     # 1. Build the database
