@@ -23,7 +23,7 @@ if "db_populated" not in st.session_state:
             st.session_state.db_populated = res.json().get("has_documents", False)
         else:
             st.session_state.db_populated = False
-    except:
+    except Exception:
         st.session_state.db_populated = False
 
 st.title("🗡️ Cloven Viscount - Document Intelligence")

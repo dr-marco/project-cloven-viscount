@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 from rag_engine import ask_document
 from fastapi import UploadFile, File
 import os
@@ -124,5 +124,5 @@ async def get_db_status():
             "has_documents": count > 0, 
             "document_count": count
         }
-    except Exception as e:
+    except Exception:
         return {"has_documents": False, "document_count": 0}
