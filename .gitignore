@@ -1,4 +1,5 @@
 .env
+.venv
 
 chroma_db/
 chroma_data/
@@ -8,6 +9,9 @@ data/
 venv/
 .venv/
 env/
+ENV/
+env.bak/
+venv.bak/
 
 __pycache__/
 *.pyc
@@ -18,3 +22,4 @@ __pycache__/
 
 old_req
 docker-compose.override.yml
+chroma_db_local/

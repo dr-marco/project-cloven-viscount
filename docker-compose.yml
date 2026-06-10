@@ -6,6 +6,23 @@ services:
     ports:
       - "6379:6379"
 
+  postgres_db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   api_backend:
     image: ghcr.io/dr-marco/project-cloven-viscount:latest
     container_name: cloven_viscount_api
@@ -15,13 +32,18 @@ services:
     environment:
       - CHROMA_DB_DIR=/app/chroma_db
       - CELERY_BROKER_URL=redis://redis_broker:6379/0
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}
     ports:
       - "8000:8000"
     volumes:
       - ./chroma_data:/app/chroma_db
       - ./data:/app/data
     depends_on:
-      - redis_broker
+      postgres_db:
+        condition: service_healthy
+      redis_broker:
+        condition: service_started
 
   ui_frontend:
     image: ghcr.io/dr-marco/project-cloven-viscount:latest
@@ -41,10 +63,15 @@ services:
       - .env
     environment:
       - CELERY_BROKER_URL=redis://redis_broker:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis_broker:6379/0
       - CHROMA_DB_DIR=/app/chroma_db
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}
     command: celery -A worker.celery_app worker --loglevel=info
     volumes:
       - ./chroma_data:/app/chroma_db
       - ./data:/app/data
     depends_on:
       - redis_broker
+
+volumes:
+  pg_data:

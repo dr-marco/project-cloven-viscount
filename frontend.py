@@ -9,12 +9,12 @@ st.set_page_config(page_title="Cloven Viscount RAG", page_icon="🗡️", layout
 API_BASE_URL = "http://api_backend:8000"
 
 # --- STATE INITIALIZATION ---
-# Streamlit reloads the page on every interaction. 
-# We use session_state to keep track of chat history and file processing status.
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "file_processed" not in st.session_state:
     st.session_state.file_processed = False
+if "uploaded_docs" not in st.session_state:
+    st.session_state.uploaded_docs = {}
 
 if "db_populated" not in st.session_state:
     try:
@@ -34,9 +34,9 @@ if st.session_state.db_populated or st.session_state.file_processed:
 else:
     st.warning("⚠️ Warning: Please make sure to upload and process a document before asking questions.")
 
-# --- SIDEBAR: UPLOAD MANAGEMENT ---
+# --- SIDEBAR: UPLOAD & DOCUMENT MANAGEMENT ---
 with st.sidebar:
-    st.header("Document Ingestion")
+    st.header("1. Document Ingestion")
     uploaded_file = st.file_uploader("Upload a PDF document", type=["pdf"])
     
     if uploaded_file is not None:
@@ -46,31 +46,42 @@ with st.sidebar:
                     files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
                     response = requests.post(f"{API_BASE_URL}/upload", files=files)
                     
-                    if response.status_code == 200:
+                    # Expecting 202 Accepted from our asynchronous architecture
+                    if response.status_code == 202:
                         data = response.json()
                         task_id = data.get('task_id')
-                        st.info(f"Task ID: {task_id} generated. Starting processing...")
+                        doc_id = data.get('document_id')
+                        
+                        st.info(f"Task ID: {task_id} generated. Starting background processing...")
                         
                         status = "PENDING"
                         status_placeholder = st.empty() 
                         
-                        while status not in ["SUCCESS", "FAILURE"]:
-                            status_placeholder.info(f"Current status: {status}... querying backend.")
-                            time.sleep(2) 
+                        while status not in ["SUCCESS", "FAILURE", "FAILED"]:
+                            status_placeholder.info(f"⏳ Current status: {status}... extracting vectors.")
                             
-                            status_response = requests.get(f"{API_BASE_URL}/task-status/{task_id}")
+                            status_response = requests.get(f"{API_BASE_URL}/document-status/{doc_id}")
                             if status_response.status_code == 200:
                                 status_data = status_response.json()
-                                status = status_data.get("status")
+                                # Updated to match backend JSON key
+                                status = status_data.get("task_status")
+                                msg = status_data.get("message", "Elaboration ongoing...")
+
+                                if status not in ["SUCCESS", "FAILED"]:
+                                    status_placeholder.info(f"⏳ {msg}")
                             else:
                                 st.error("Error communicating with the backend status endpoint.")
                                 break
+                                
+                            time.sleep(2) 
                         
                         status_placeholder.empty() 
                         if status == "SUCCESS":
                             st.success("✅ Document processed successfully! You can now ask questions.")
                             st.session_state.file_processed = True
-                        elif status == "FAILURE":
+                            # Save to session for deletion management
+                            st.session_state.uploaded_docs[uploaded_file.name] = doc_id
+                        elif status in ["FAILURE", "FAILED"]:
                             st.error("❌ There was an error processing the document by the worker.")
                             
                     else:
@@ -78,8 +89,28 @@ with st.sidebar:
                 except Exception as e:
                     st.error(f"Backend connection error: {e}")
 
-# --- MAIN AREA: CHAT INTERFACE ---
+    st.divider()
+    
+    # --- HARD DELETE MANAGEMENT ---
+    st.header("2. Manage Database")
+    if not st.session_state.uploaded_docs:
+        st.write("No documents processed in this session.")
+    else:
+        for doc_name, doc_uuid in list(st.session_state.uploaded_docs.items()):
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.caption(f"📄 {doc_name}")
+            with col2:
+                if st.button("Del", key=f"del_{doc_uuid}", help="Permanently delete from DB"):
+                    with st.spinner("Deleting..."):
+                        del_res = requests.delete(f"{API_BASE_URL}/documents/{doc_uuid}")
+                        if del_res.status_code == 200:
+                            del st.session_state.uploaded_docs[doc_name]
+                            st.rerun()
+                        else:
+                            st.error(f"Failed to delete: {del_res.text}")
 
+# --- MAIN AREA: CHAT INTERFACE ---
 # Display chat history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -100,7 +131,6 @@ if prompt := st.chat_input("Ask a question about the uploaded document..."):
     with st.chat_message("assistant"):
         with st.spinner("Searching documents and generating response..."):
             try:
-                # Call our new /chat endpoint
                 past_history = st.session_state.messages[:-1]
                 
                 payload = {
@@ -116,6 +146,6 @@ if prompt := st.chat_input("Ask a question about the uploaded document..."):
                     # Save the response in the chat history
                     st.session_state.messages.append({"role": "assistant", "content": answer})
                 else:
-                    st.error(f"Backend error: {response.text}")
+                    st.error(f"Backend error: {response.status_code} - {response.text}")
             except Exception as e:
                 st.error(f"Backend connection error: {e}")
