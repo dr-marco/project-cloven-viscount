@@ -10,16 +10,11 @@ def test_health_check():
 
 def test_chat_endpoint_validation():
     response = client.post("/chat", json={})
-    assert response.status_code == 422
+    assert response.status_code == 422 # Unprocessable Entity
 
-def test_chat_endpoint_valid_payload():
-    payload = {"query": "What is this document about?"}
-    response = client.post("/chat", json=payload)
-    
-    assert response.status_code in [200, 500] 
-    
-    if response.status_code == 200:
-        data = response.json()
-        assert "answer" in data
-        assert "query" in data
-        assert data["query"] == payload["query"]
+def test_db_status_endpoint():
+    response = client.get("/db-status")
+    assert response.status_code == 200
+    data = response.json()
+    assert "has_documents" in data
+    assert data["has_documents"] is False

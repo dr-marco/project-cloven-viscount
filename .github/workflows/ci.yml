@@ -10,9 +10,31 @@ on:
       - main
 
 jobs:
-  # Job 1: Static Code Analysis
+  # Job 1: Static Code Analysis & Integration Tests
   lint-and-test:
     runs-on: ubuntu-latest
+    
+    # 1. Definiamo i servizi effimeri necessari al backend
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -30,9 +52,12 @@ jobs:
       - name: Run code check (Ruff)
         run: ruff check .
 
+      # 2. Iniettiamo le credenziali che puntano ai container di test appena creati
       - name: Run Pytest
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          DATABASE_URL: "postgresql+asyncpg://test_user:test_password@localhost:5432/test_db"
+          CELERY_BROKER_URL: "redis://localhost:6379/0"
         run: pytest test_api.py -v
 
   # Job 2: Infrastructure Verification & CD (Push to Registry)
