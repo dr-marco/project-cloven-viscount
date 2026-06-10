@@ -6,7 +6,6 @@ from langchain.globals import set_debug
 from sqlalchemy import text
 
 # Local imports
-from vector_store import get_vector_database
 from routes import router, limiter
 from database import async_session_maker
 

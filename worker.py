@@ -1,17 +1,12 @@
 import os
-import asyncio
 import redis
 from celery import Celery
-from sqlalchemy import update, create_engine, text
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 # Your local imports
 from document_processor import process_pdf
 from vector_store import get_vector_database
-
-# New imports for PostgreSQL state management
-from database import async_session_maker
-from models import Document
 
 # Broker configuration
 broker_url = os.getenv("CELERY_BROKER_URL", "redis://redis_broker:6379/0")
